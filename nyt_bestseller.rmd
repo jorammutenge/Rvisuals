@@ -1,0 +1,164 @@
+---
+title: 'New York Times Bestseller List: A Visual Exploration'
+output:
+  html_document:
+    df_print: paged
+---
+
+``` {r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+### Introduction
+<p>In this analysis, I explore the top 20 books that have featured on the NYT Bestseller list. I also review the author who has appeared on this much coveted list the most. Spoiler alert: the book is __The Da Vinci Code__ and the author is James Michener.</p>
+<p>Additionally, I review the three authors behind the pseudonyms present in the dataset and the books penned under those pseudonyms.</p>
+
+Load libraries.
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(readr)
+library(stringr)
+library(lubridate)
+library(dplyr)
+library(ggeasy)
+library(scales)
+library(httr)
+```
+
+load the dataset.
+```{r}
+book <- read.csv('nyt-bestsellers.csv', na.strings=c("","NA"))
+head(book)
+```
+Choose relevant columns.
+```{r}
+book <- book[,c(7:12)]
+head(book)
+```
+
+```{r}
+dim(book)
+```
+<p>There are 4739 rows and 6 columns.</p>  
+<br>
+<p>Check datatype for date column.</p>  
+```{r}
+class(book$us_date)
+```
+<p>The date type is character. This isn't what we want. Let's change it to date.</p> 
+```{r}
+book$us_date <- mdy(book$us_date)
+class(book$us_date)
+```
+<br>
+See which year had the most unique books as bestsellers.  
+Create a column with date as year only.  
+```{r}
+year_only <- format(book$us_date, format="%Y")
+book <- cbind(book, year_only)
+
+#Remove rows that contain the phrase 'No List Published' in title column.
+book <- book[!grepl('No List Published', book$title),]
+head(book)
+```
+<br>
+<p>See which title appears the most on the bestseller list.</p> 
+```{r}
+book_count <- book %>%
+  group_by(title) %>%
+  summarise(times_on_list=n()) %>%
+  arrange(-times_on_list)
+book_listed_count <- head(book_count, 20) #Only show the top 20 books
+book_listed_count
+```
+<br>
+<p>See the graph.</p>
+```{r}
+ggplot(data=book_listed_count, aes(reorder(title, times_on_list), times_on_list)) + 
+  geom_bar(colour="#6495ED", fill="#6495ED", width=.65, stat="identity") + 
+  guides(scale=none) +
+  coord_flip() + #Interchange x and y axis.
+  xlab("Book title") + ylab("No. of times on list") +
+  ggtitle("Top 20 book that stayed the longest on bestseller list")+
+  theme(plot.title = element_text(hjust = 0.5, size = 15)) #Center the title.
+```
+<br>
+<p>The __The Da Vinci Code__ has featured the most on the bestseller list, which isn't surprising considering how much buzz surrounded the book when it was published. I'm also not surprised that __Fifty Shades of Grey__ made this list. I don't recognize the other books.</p>  
+<br>
+<p>Which author has been on the list the most.</p>
+```{r}
+popular_author <- book %>%
+  group_by(authors) %>%
+  summarise(count_on_list=n()) %>%
+  arrange(-count_on_list)
+author_appears <- head(popular_author, 20)
+
+#Plot the graph.
+ggplot(data=author_appears, aes(reorder(authors, count_on_list), count_on_list)) + 
+  geom_bar(colour="#6495ED", fill="#6495ED", width=.65, stat="identity") + 
+  guides(scale=none) +
+  coord_flip() + #Interchange x and y axis.
+  xlab("Author name") + ylab("No. of times on list") +
+  ggtitle("Top 20 popular authors")+
+  theme(plot.title = element_text(hjust = 0.5, size = 15)) #Center the title.
+```
+<br>
+<p>The most popular author on this list is James Michener. Surprisingly, the author of __The Da Vinci Code__, Dan Brown isn't even on the top 5 list. One reason is that most of the top 5 authors on this list have written many books, e.g. James Michener has written over 40 books, and Danielle Steel has written 190 books including 141 novels. By contrast, Dan Brown has only written 8 books.</p>  
+<p>Unlike on the list of book titles, this list is familiar to me. I recognize most of the names on it.</p>
+<br>
+<p>Which year had the most bestsellers</p>
+```{r}
+year_count <- book %>%
+  group_by(year_only) %>%
+  summarise(num_of_books=n()) %>%
+  arrange(-num_of_books)
+books_in_year <- head(year_count, 30)
+books_in_year
+```
+<br>
+<p>See the graph.</p>
+```{r}
+
+ggplot(data=books_in_year, aes(reorder(year_only, num_of_books), num_of_books)) + 
+  geom_bar(colour="#6495ED", fill="#6495ED", width=.65, stat="identity") + 
+  guides(scale=none) +
+  coord_flip() + #Interchange x and y axis.
+  xlab("Year") + ylab("Number of books") +
+  ggtitle("Year with most bestsellers")+
+  theme(plot.title = element_text(hjust = 0.5, size = 15)) #Center the title.
+```
+
+<p>The year that featured the most bestsellers is 1941. This was strange to me given how easy publishing has become today. You'd expect more books to feature on the bestseller list as more and more authors publish their work. Until I discovered that self-published books like kindle books cannot be on the NYT bestseller list. To be on the list, the author must be publish through a traditional publisher.</p>
+<p>We can see that the only 21st century years that made the list are 2017, 2012, 2006, and 2000. The rest are 20th years with the forties and thirties dominating.</p>
+<br>
+<p>Let's see how many pseudonyms are in the dataset.</p>
+```{r}
+pseudonyms <- book[complete.cases(book$pseudonym_of),]
+n_distinct(pseudonyms$authors)
+```
+<p>There are 3 pseudonyms. Let's see what they are.</p>
+```{r}
+unique(pseudonyms$authors)
+```
+
+<p>Let's reveal the authors behind those pseudonyms and what book they penned under that pseudonym.</p>  
+
+```{r}
+real_author <- pseudonyms %>% 
+  distinct(pseudonym_of, .keep_all = TRUE)
+real_author[, c('pseudonym_of', 'authors', 'title')] #Display only selected columns.
+```
+
+<p>Which author has been more successful using a pseudonym.</p> 
+```{r}
+pseudonyms %>%
+  group_by(pseudonym_of) %>%
+  summarise(appearance_count = n()) %>%
+  arrange(-appearance_count)
+```
+
+<p>Joe Klein has been on the bestseller list under a pseudonym more times followed by Stephen King. J.K. Rowling wasn't as successful as she only appeared once on the list under a pseudonym.</p>
+
+
+
